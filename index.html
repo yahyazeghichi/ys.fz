@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Chat - Fixed</title>
+    <title>Pixel Chat - Secure</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
     
@@ -168,10 +168,11 @@
         #login-error {
             color: #ff4757;
             font-family: 'VT323', monospace;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             margin-top: 15px;
             min-height: 1.5em;
             display: block;
+            word-break: break-all;
         }
 
         @media (max-width: 500px) {
@@ -185,7 +186,7 @@
 
     <div class="terminal-container">
         <header>
-            <h1>PIXEL CHAT <span style="color:var(--primary)">V4</span></h1>
+            <h1>PIXEL CHAT <span style="color:var(--primary)">SECURE</span></h1>
             <div style="display:flex; gap:10px; align-items:center;">
                 <button class="clear-btn" onclick="clearHistory()">CLR</button>
                 <div id="status" class="status-badge">OFFLINE</div>
@@ -193,7 +194,7 @@
         </header>
 
         <main id="chat-window">
-            <div class="system-msg">System Ready.</div>
+            <div class="system-msg">System Ready (Secure Mode).</div>
         </main>
 
         <footer class="input-area">
@@ -208,23 +209,22 @@
                 <input type="text" id="username-input" placeholder="NICKNAME" maxlength="12">
                 <br><br>
                 <button id="connect-btn" onclick="attemptJoin()">CONNECT</button>
-                <!-- Error Message Area -->
                 <span id="login-error"></span>
             </div>
         </div>
     </div>
 
     <script>
-        // --- CONFIGURATION (SWITCHED TO EMQX) ---
-        // EMQX is generally more reliable for WebSockets than HiveMQ
+        // --- CONFIGURATION (SECURE WSS) ---
+        // Using WSS (Secure WebSocket) on port 8084
         const MQTT_HOST = "broker.emqx.io"; 
-        const MQTT_PORT = 8083; // Note: EMQX uses 8083 for WS (not 8000)
-        const MQTT_TOPIC = "pixel-chat-emqx-v1";
+        const MQTT_PORT = 8084; 
+        const MQTT_TOPIC = "pixel-chat-secure-v1";
         
         let client;
         let myName = "";
         const clientId = "pixel-" + Math.random().toString(16).substr(2, 10);
-        const STORAGE_KEY = 'pixel_chat_history_v4';
+        const STORAGE_KEY = 'pixel_chat_history_secure';
 
         // --- EVENT LISTENERS ---
         document.getElementById('username-input').addEventListener('keypress', function (e) {
@@ -241,7 +241,7 @@
             const nameInput = document.getElementById('username-input');
             const errorSpan = document.getElementById('login-error');
             
-            errorSpan.innerText = "Connecting to EMQX...";
+            errorSpan.innerText = "Connecting via Secure Port (8084)...";
             errorSpan.style.color = "#ffff00"; 
 
             if (!nameInput || !nameInput.value) {
@@ -264,9 +264,9 @@
                     document.getElementById('message-input').disabled = false;
                     document.getElementById('send-btn').disabled = false;
                     document.getElementById('message-input').focus();
-                    addSystemMessage("Connected to EMQX Server!");
+                    addSystemMessage("Secure Connection Established!");
                 } else {
-                    errorSpan.innerText = "Check your Internet or try a different network.";
+                    errorSpan.innerText = "Still Failed. Your network might block all WebSockets.";
                     errorSpan.style.color = "red";
                 }
             });
@@ -290,8 +290,8 @@
             client.onMessageArrived = onMessageArrived;
 
             const options = {
-                timeout: 10, 
-                useSSL: false,
+                timeout: 15, 
+                useSSL: true, // CRITICAL: Enable Secure Connection
                 onSuccess: function() {
                     console.log("Connected");
                     updateStatus("ONLINE", true);
