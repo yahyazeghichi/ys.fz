@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Chat - Secure</title>
+    <title>Pixel Chat - Reply Feature</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
     
@@ -17,6 +17,7 @@
             --user-bubble: #4cc9f0;
             --other-bubble: #4895ef;
             --border-color: #ffffff;
+            --reply-bg: rgba(0,0,0,0.2);
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -109,9 +110,53 @@
             font-family: 'Press Start 2P', cursive;
             font-size: 0.5rem; margin-bottom: 6px; display: block; opacity: 0.9; 
             border-bottom: 1px solid rgba(0,0,0,0.2); padding-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .reply-btn {
+            cursor: pointer;
+            color: #000;
+            font-weight: bold;
+            font-size: 0.7rem;
+            margin-left: 10px;
+            user-select: none;
+        }
+        .message.other .reply-btn { color: #fff; }
+
+        /* Quote Box Styling */
+        .message-quote {
+            background-color: rgba(0,0,0,0.3);
+            border-right: 3px solid #fff;
+            padding: 5px;
+            margin-bottom: 8px;
+            font-size: 1rem;
+            font-style: italic;
+            color: #ccc;
         }
 
         .system-msg { text-align: center; color: #888; font-size: 1.1rem; margin: 10px 0; font-style: italic; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px; }
+
+        /* Reply Preview Bar in Footer */
+        #reply-preview-bar {
+            display: none; /* Hidden by default */
+            background-color: #333;
+            border-bottom: 2px solid var(--accent);
+            padding: 8px 15px;
+            font-size: 1rem;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #reply-preview-text { color: #fff; opacity: 0.8; }
+        #cancel-reply-btn { 
+            color: #ff4757; 
+            font-weight: bold; 
+            cursor: pointer; 
+            border: 1px solid #ff4757;
+            padding: 2px 8px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.6rem;
+        }
 
         .input-area {
             padding: 10px;
@@ -186,7 +231,7 @@
 
     <div class="terminal-container">
         <header>
-            <h1>PIXEL CHAT <span style="color:var(--primary)">SECURE</span></h1>
+            <h1>PIXEL CHAT <span style="color:var(--primary)">REPLY</span></h1>
             <div style="display:flex; gap:10px; align-items:center;">
                 <button class="clear-btn" onclick="clearHistory()">CLR</button>
                 <div id="status" class="status-badge">OFFLINE</div>
@@ -194,8 +239,14 @@
         </header>
 
         <main id="chat-window">
-            <div class="system-msg">System Ready (Secure Mode).</div>
+            <div class="system-msg">System Ready (Reply Feature ON).</div>
         </main>
+
+        <!-- Reply Preview Bar -->
+        <div id="reply-preview-bar" style="display:none;">
+            <div id="reply-preview-text">Replying to...</div>
+            <div id="cancel-reply-btn" onclick="cancelReply()">X</div>
+        </div>
 
         <footer class="input-area">
             <input type="text" id="message-input" placeholder="TYPE MESSAGE..." disabled autocomplete="off">
@@ -215,16 +266,18 @@
     </div>
 
     <script>
-        // --- CONFIGURATION (SECURE WSS) ---
-        // Using WSS (Secure WebSocket) on port 8084
+        // --- CONFIGURATION ---
         const MQTT_HOST = "broker.emqx.io"; 
         const MQTT_PORT = 8084; 
-        const MQTT_TOPIC = "pixel-chat-secure-v1";
+        const MQTT_TOPIC = "pixel-chat-reply-v1";
         
         let client;
         let myName = "";
         const clientId = "pixel-" + Math.random().toString(16).substr(2, 10);
-        const STORAGE_KEY = 'pixel_chat_history_secure';
+        const STORAGE_KEY = 'pixel_chat_history_reply';
+        
+        // Reply State
+        let replyingTo = null; 
 
         // --- EVENT LISTENERS ---
         document.getElementById('username-input').addEventListener('keypress', function (e) {
@@ -241,7 +294,7 @@
             const nameInput = document.getElementById('username-input');
             const errorSpan = document.getElementById('login-error');
             
-            errorSpan.innerText = "Connecting via Secure Port (8084)...";
+            errorSpan.innerText = "Connecting Securely...";
             errorSpan.style.color = "#ffff00"; 
 
             if (!nameInput || !nameInput.value) {
@@ -264,9 +317,9 @@
                     document.getElementById('message-input').disabled = false;
                     document.getElementById('send-btn').disabled = false;
                     document.getElementById('message-input').focus();
-                    addSystemMessage("Secure Connection Established!");
+                    addSystemMessage("Connected. Reply feature active.");
                 } else {
-                    errorSpan.innerText = "Still Failed. Your network might block all WebSockets.";
+                    errorSpan.innerText = "Connection Failed.";
                     errorSpan.style.color = "red";
                 }
             });
@@ -290,12 +343,13 @@
             client.onMessageArrived = onMessageArrived;
 
             const options = {
-                timeout: 15, 
-                useSSL: true, // CRITICAL: Enable Secure Connection
+                timeout: 10, 
+                useSSL: true,
+                cleanSession: false,
                 onSuccess: function() {
                     console.log("Connected");
                     updateStatus("ONLINE", true);
-                    client.subscribe(MQTT_TOPIC);
+                    client.subscribe(MQTT_TOPIC, {qos: 0});
                     callback(true);
                 },
                 onFailure: function(responseObject) {
@@ -313,6 +367,26 @@
             }
         }
 
+        // --- REPLY FUNCTIONS ---
+        function startReply(messageObj) {
+            replyingTo = messageObj;
+            const previewBar = document.getElementById('reply-preview-bar');
+            const previewText = document.getElementById('reply-preview-text');
+            
+            // Truncate long text for preview
+            const shortText = messageObj.text.length > 30 ? messageObj.text.substring(0, 30) + "..." : messageObj.text;
+            
+            previewText.innerText = `Replying to ${messageObj.sender}: "${shortText}"`;
+            previewBar.style.display = 'flex';
+            
+            document.getElementById('message-input').focus();
+        }
+
+        function cancelReply() {
+            replyingTo = null;
+            document.getElementById('reply-preview-bar').style.display = 'none';
+        }
+
         // --- MESSAGING LOGIC ---
         function sendMessage() {
             const input = document.getElementById('message-input');
@@ -326,14 +400,24 @@
                     time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
                 };
 
+                // Attach Reply Data if exists
+                if (replyingTo) {
+                    messageData.replyTo = {
+                        sender: replyingTo.sender,
+                        text: replyingTo.text
+                    };
+                }
+
                 const message = new Paho.MQTT.Message(JSON.stringify(messageData));
                 message.destinationName = MQTT_TOPIC;
+                message.retained = true; 
                 client.send(message);
 
                 renderMessage(messageData, true);
                 saveToHistory(messageData, true);
 
                 input.value = '';
+                cancelReply(); // Reset reply state
                 input.focus();
             } else {
                 alert("Not connected or empty message.");
@@ -342,10 +426,21 @@
 
         function onMessageArrived(message) {
             try {
-                const data = JSON.parse(message.payloadString);
-                if (data.id === clientId) return; 
-                renderMessage(data, false);
-                saveToHistory(data, false);
+                const payload = message.payloadString;
+                if (!payload) return;
+
+                const data = JSON.parse(payload);
+                
+                // Duplicate Check
+                const existing = Array.from(document.querySelectorAll('.message')).find(el => el.innerText.includes(data.text) && el.querySelector('.meta').innerText.includes(data.sender));
+                if (existing) return;
+                
+                renderMessage(data, false); 
+                
+                if (data.id !== clientId) {
+                    saveToHistory(data, false);
+                }
+                
             } catch (e) {
                 console.error("Parse error", e);
             }
@@ -355,8 +450,28 @@
         function renderMessage(data, isMe) {
             const chatWindow = document.getElementById('chat-window');
             const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message', isMe ? 'mine' : 'other');
-            msgDiv.innerHTML = `<span class="meta">${data.sender} [${data.time || '...'}]</span>${escapeHtml(data.text)}`;
+            const amISender = (data.id === clientId);
+            
+            msgDiv.classList.add('message');
+            msgDiv.classList.add(amISender ? 'mine' : 'other');
+            
+            let innerHTML = '';
+
+            // 1. If this message is a reply, show the quote
+            if (data.replyTo) {
+                innerHTML += `<div class="message-quote">↩ ${data.replyTo.sender}: ${escapeHtml(data.replyTo.text)}</div>`;
+            }
+
+            // 2. The Meta Header (Name + Time + Reply Button)
+            innerHTML += `<span class="meta">
+                            <span>${data.sender} [${data.time || '...'}]</span>
+                            <span class="reply-btn" onclick='startReply(${JSON.stringify(data)})'>↩ REPLY</span>
+                         </span>`;
+
+            // 3. The Main Text
+            innerHTML += escapeHtml(data.text);
+            
+            msgDiv.innerHTML = innerHTML;
             chatWindow.appendChild(msgDiv);
             scrollToBottom();
         }
