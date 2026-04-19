@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Chat - Debug</title>
+    <title>Pixel Chat - Global Fix</title>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -65,14 +65,16 @@
             line-height: 1.5;
         }
         
-        .debug-info {
-            font-family: 'VT323', monospace;
-            font-size: 0.9rem;
-            color: #000;
-            background: rgba(255,255,255,0.2);
-            padding: 2px 5px;
-            border-radius: 4px;
+        .status-badge {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.5rem;
+            background: #000;
+            color: #ff0000;
+            padding: 5px 8px;
+            border: 2px solid #fff;
+            text-transform: uppercase;
         }
+        .status-badge.online { color: #00ff00; }
 
         #chat-window {
             flex: 1;
@@ -192,6 +194,12 @@
         button:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
         button:disabled { background-color: #555; cursor: not-allowed; transform: none; }
         button.clear-btn { background-color: #ff4757; font-size: 0.6rem; padding: 8px 10px; }
+        
+        /* Factory Reset Button Style */
+        button.reset-btn {
+            background-color: #ffaa00; /* Orange */
+            margin-right: 5px;
+        }
 
         #login-screen {
             position: absolute;
@@ -223,11 +231,15 @@
     <div class="terminal-container">
         <header>
             <h1>PIXEL NET</h1>
-            <div class="debug-info" id="peer-count">Peers: 0</div>
+            <div style="display:flex; gap:5px; align-items:center;">
+                <button class="reset-btn" onclick="factoryReset()" title="Clear All Data & Restart">RST</button>
+                <button class="clear-btn" onclick="clearChat()">CLR</button>
+                <div id="status" class="status-badge">OFFLINE</div>
+            </div>
         </header>
 
         <main id="chat-window">
-            <div class="system-msg">System Ready. Waiting for connection...</div>
+            <div class="system-msg">Initializing...</div>
         </main>
 
         <!-- Reply Preview Bar -->
@@ -247,29 +259,37 @@
                 <h2>ENTER INFO</h2>
                 
                 <div class="login-input">
-                    <label>YOUR NICKNAME</label>
+                    <label>NICKNAME</label>
                     <input type="text" id="username-input" placeholder="NICKNAME" maxlength="12">
                 </div>
 
                 <div class="login-input">
-                    <label style="color:var(--primary)">ROOM ID (Must be same as friend)</label>
-                    <input type="text" id="room-id-input" value="pixel-room-1" placeholder="ROOM ID">
+                    <label style="color:var(--primary)">ROOM ID (Must be SAME as friend)</label>
+                    <input type="text" id="room-id-input" value="algeria-room-1" placeholder="ROOM ID">
                 </div>
 
                 <br>
                 <button id="connect-btn" onclick="attemptJoin()">CONNECT</button>
+                <div style="margin-top:10px; font-size:0.8rem; color:#888;">If it fails, use Mobile Data or VPN.</div>
             </div>
         </div>
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        // Using multiple relays for redundancy (US and Manhattan)
+        // --- VERSION CONTROL ---
+        // If this number changes, the app will automatically clear local cache
+        const APP_VERSION = 5; 
+
+        // --- CONFIGURATION (GUN.JS) ---
+        // Using diverse public relays. Some might be blocked in Algeria, so we try multiple.
         var gun = Gun({
             peers: [
-                'https://gun-us.herokuapp.com/gun', // Primary US Relay
-                'https://gun-manhattan.herokuapp.com/gun' // Backup Relay
-            ]
+                'https://gun-manhattan.herokuapp.com/gun',
+                'https://gun-us.herokuapp.com/gun',
+                'https://gun-docker-us.herokuapp.com/gun',
+                'https://gun.ecological.cx/gun'
+            ],
+            file: 'pixel-chat-db' // File name for IndexedDB
         });
         
         let chatDB;
@@ -278,13 +298,38 @@
         let renderedMessageIds = new Set(); 
         let replyingTo = null;
 
-        // --- MONITOR PEERS (DEBUG) ---
+        // --- AUTO CLEANUP ON VERSION CHANGE ---
+        const storedVer = localStorage.getItem('pixel_chat_version');
+        if (storedVer != APP_VERSION) {
+            console.log("New Version detected. Cleaning cache...");
+            // Clear Gun Data
+            if (window.indexedDB) {
+                var req = indexedDB.deleteDatabase('pixel-chat-db');
+                req.onsuccess = function () {
+                    console.log("Database deleted");
+                    localStorage.setItem('pixel_chat_version', APP_VERSION);
+                    location.reload(); // Reload to start fresh
+                };
+                req.onerror = function () {
+                    // Fallback if IDB fails, just reload
+                    localStorage.setItem('pixel_chat_version', APP_VERSION);
+                    location.reload();
+                };
+            } else {
+                localStorage.clear();
+                localStorage.setItem('pixel_chat_version', APP_VERSION);
+                location.reload();
+            }
+        }
+
+        // --- MONITOR PEERS ---
         setInterval(() => {
             if(gun._.opt.peers) {
                 const count = Object.keys(gun._.opt.peers).length;
-                const el = document.getElementById('peer-count');
-                el.innerText = `Peers: ${count}`;
-                el.style.color = count > 0 ? '#00ff00' : '#ff0000';
+                const el = document.getElementById('status');
+                el.innerText = count > 0 ? `ONLINE (${count})` : "OFFLINE";
+                if(count > 0) el.classList.add('online');
+                else el.classList.remove('online');
             }
         }, 2000);
 
@@ -318,8 +363,7 @@
                 return;
             }
 
-            // Initialize Chat DB based on Room ID
-            // This is CRITICAL. If IDs differ, you won't see messages.
+            // Initialize Chat DB
             chatDB = gun.get(roomId);
 
             // Hide Login
@@ -328,10 +372,10 @@
             document.getElementById('send-btn').disabled = false;
             document.getElementById('message-input').focus();
 
-            // Listen
+            // Start Listening
             listenToChat();
             
-            addSystemMessage(`Joined Room: ${roomId}`);
+            addSystemMessage(`Connected to Room: ${roomId}`);
         }
 
         // --- DATABASE LISTENER ---
@@ -339,15 +383,17 @@
             if(!chatDB) return;
             
             chatDB.map().on(function(data, key) {
-                // Ignore empty Gun data
+                // Ignore Gun sync data packets
                 if (!data || !data.text) return;
 
                 const id = key;
+                
+                // Duplicate check
                 if (renderedMessageIds.has(id)) return;
                 
                 renderedMessageIds.add(id);
+                
                 const isMe = (data.senderId === myId);
-
                 renderMessage(data, isMe, id);
             });
         }
@@ -376,6 +422,7 @@
                     };
                 }
 
+                // Send to Gun
                 chatDB.set(messageData, function(ack){
                     btn.disabled = false;
                     btn.innerText = "SEND";
@@ -446,6 +493,25 @@
         function scrollToBottom() {
             const chatWindow = document.getElementById('chat-window');
             chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        // Factory Reset - Clears everything and reloads
+        function factoryReset() {
+            if(confirm("FACTORY RESET: This will delete all app data and reload the page. Continue?")) {
+                localStorage.clear();
+                if (window.indexedDB) {
+                    indexedDB.deleteDatabase('pixel-chat-db');
+                }
+                // Force version mismatch to trigger reload
+                localStorage.setItem('pixel_chat_version', 0);
+                location.reload();
+            }
+        }
+
+        function clearChat() {
+            if(confirm("Clear local view (Messages will reappear from DB)?")) {
+                document.getElementById('chat-window').innerHTML = '';
+            }
         }
 
         function escapeHtml(text) {
