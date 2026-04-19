@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Chat - Stable</title>
+    <title>Pixel Chat - Final Sync</title>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -221,15 +221,15 @@
 
     <div class="terminal-container">
         <header>
-            <h1>PIXEL DB <span style="color:var(--primary)">V2</span></h1>
+            <h1>PIXEL FINAL</h1>
             <div style="display:flex; gap:10px; align-items:center;">
                 <button class="clear-btn" onclick="clearHistory()">CLR</button>
-                <div id="status" class="status-badge">OFFLINE</div>
+                <div id="status" class="status-badge">CONNECTING</div>
             </div>
         </header>
 
         <main id="chat-window">
-            <div class="system-msg">Initializing Database...</div>
+            <div class="system-msg">Connecting to Global Network...</div>
         </main>
 
         <!-- Reply Preview Bar -->
@@ -249,30 +249,26 @@
                 <h2>ENTER YOUR<br>NICKNAME</h2>
                 <input type="text" id="username-input" placeholder="NICKNAME" maxlength="12">
                 <br><br>
-                <button id="connect-btn" onclick="attemptJoin()">JOIN DB</button>
+                <button id="connect-btn" onclick="attemptJoin()">CONNECT</button>
             </div>
         </div>
     </div>
 
     <script>
-        // --- CONFIGURATION (GUN.JS) ---
-        // Using multiple relays for redundancy
+        // --- CONFIGURATION (GUN.JS - FINAL) ---
+        // IMPORTANT: We use 'https://gun-manhattan.herokuapp.com/gun' which is the primary public relay.
+        // We DO NOT force localStorage to avoid "offline only" glitches.
+        
         var gun = Gun({
-            peers: [
-                'https://gun-manhattan.herokuapp.com/gun',
-                'https://gun-us.herokuapp.com/gun',
-                'https://gun-eu.herokuapp.com/gun'
-            ],
-            localStorage: true // Force local storage
+            peers: ['https://gun-manhattan.herokuapp.com/gun']
         });
         
-        var chatDB = gun.get('pixel-chat-db-v4'); 
+        // CRITICAL: The DB Key is fixed. Both you and your friend MUST use this code.
+        var chatDB = gun.get('pixel-chat-final'); 
         
         let myName = "";
         let myId = "user-" + Math.random().toString(36).substr(2, 9);
         
-        // Keep track of rendered messages to prevent duplicates
-        // Using Set of message IDs (Soul IDs) is the safest way in Gun
         let renderedMessageIds = new Set(); 
         let replyingTo = null;
 
@@ -304,33 +300,34 @@
             document.getElementById('message-input').disabled = false;
             document.getElementById('send-btn').disabled = false;
             document.getElementById('message-input').focus();
-            document.getElementById('status').innerText = "DB ONLINE";
+            
+            // Update UI Status
+            document.getElementById('status').innerText = "ONLINE";
             document.getElementById('status').classList.add('online');
 
-            // Listen to Database
+            // Start Listening
             listenToChat();
             
-            addSystemMessage("Database Connected. History loading...");
+            addSystemMessage("Connected. Syncing with database...");
         }
 
         // --- DATABASE LISTENER ---
         function listenToChat() {
             // .map() listens to every item in the list
+            // We use .once() first to load history, then .on() for real-time?
+            // No, .map().on() handles both historical data and new updates in Gun.
+            
             chatDB.map().on(function(data, key) {
-                // Gun sometimes sends null/undefined for empty slots, ignore them
+                // Gun sometimes sends undefined during syncs
                 if (!data || !data.text) return;
 
-                // Key in Gun is the Soul ID (Unique ID)
                 const id = key;
 
-                // CRITICAL: Check if we already rendered this exact ID
-                // This solves the "Duplicate Message" issue
+                // Duplicate check
                 if (renderedMessageIds.has(id)) return;
                 
-                // Mark as rendered
                 renderedMessageIds.add(id);
                 
-                // Determine if it's me
                 const isMe = (data.senderId === myId);
 
                 renderMessage(data, isMe, id);
@@ -344,7 +341,6 @@
             const btn = document.getElementById('send-btn');
 
             if (text !== "") {
-                // UI Feedback: Disable button and show "..."
                 btn.disabled = true;
                 btn.innerText = "...";
 
@@ -355,7 +351,6 @@
                     timestamp: Date.now()
                 };
 
-                // Attach Reply if exists
                 if (replyingTo) {
                     messageData.replyTo = {
                         sender: replyingTo.sender,
@@ -363,10 +358,11 @@
                     };
                 }
 
-                // Send to Gun Database
-                // We do NOT call renderMessage here. We let map().on handle it to avoid duplicates.
+                // Send to Gun
+                // Note: We don't render here. We wait for .map().on to fire back.
+                // This ensures we are truly synced with the DB.
                 chatDB.set(messageData, function(ack){
-                    // Callback when sent
+                    // Callback executed when server acknowledges
                     btn.disabled = false;
                     btn.innerText = "SEND";
                     input.value = '';
@@ -383,19 +379,15 @@
             const msgDiv = document.createElement('div');
             msgDiv.classList.add('message');
             msgDiv.classList.add(isMe ? 'mine' : 'other');
-            msgDiv.id = "msg-" + id; // Store ID in DOM for reference
+            msgDiv.id = "msg-" + id;
 
             let innerHTML = '';
 
-            // Reply Quote
             if (data.replyTo) {
                 innerHTML += `<div class="message-quote">↩ ${escapeHtml(data.replyTo.sender)}: ${escapeHtml(data.replyTo.text)}</div>`;
             }
 
-            // Format Time
             const timeStr = new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-
-            // Header
             const dataStr = JSON.stringify(data).replace(/"/g, '&quot;');
             
             innerHTML += `<span class="meta">
@@ -403,12 +395,9 @@
                             <span class="reply-btn" onclick="startReply(${dataStr})">↩ REPLY</span>
                          </span>`;
 
-            // Text
             innerHTML += escapeHtml(data.text);
             
             msgDiv.innerHTML = innerHTML;
-            
-            // Insert at end
             chatWindow.appendChild(msgDiv);
             scrollToBottom();
         }
@@ -447,8 +436,9 @@
         }
 
         function clearHistory() {
-            if(confirm("Delete local history? This will clear your browser's cache of messages.")) {
-                localStorage.clear(); // Clear all Gun data
+            if(confirm("Clear local data? This will reset your view but the database remains.")) {
+                // Gun stores data in IndexedDB. Clearing it requires specific Gun usage or just reloading.
+                // For this simple app, we just reload.
                 location.reload();
             }
         }
