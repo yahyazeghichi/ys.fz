@@ -410,25 +410,25 @@
             <div class="login-screen">
                 <div class="logo-area">
                     <i class="fa-solid fa-comments"></i>
-                    <h2>دردشة مشفرة P2P</h2>
-                    <p style="color: var(--text-secondary); margin-top: 10px;">تواصل مباشرة بين الأجهزة</p>
+                    <h2>أي شيء</h2>
+                    <p style="color: var(--text-secondary); margin-top: 10px;">كلنا بعبوعة</p>
                 </div>
 
                 <!-- إدخال الاسم -->
                 <div class="input-group">
-                    <label>اسمك المعروض</label>
+                    <label>اسم العصفورة</label>
                     <div class="input-wrapper">
                         <i class="fa-solid fa-user"></i>
-                        <input type="text" id="username-input" placeholder="مثال: أحمد..." maxlength="20">
+                        <input type="text" id="username-input" placeholder="مثال: أ or و..." maxlength="20">
                     </div>
                 </div>
 
-                <!-- عرض المعرف -->
+                <!-- عرض الرابط -->
                 <div class="input-group">
-                    <label>معرفك الشخصي (أرسله لصديقك)</label>
+                    <label>رابطك الشخصي (أرسله لعبدك)</label>
                     <div class="my-id-display">
                         <span id="my-id" style="color: #666;">جاري الإنشاء...</span>
-                        <button class="copy-btn" id="copy-btn" title="نسخ المعرف">
+                        <button class="copy-btn" id="copy-btn" title="نسخ الرابط">
                             <i class="fa-regular fa-copy"></i>
                         </button>
                     </div>
@@ -436,12 +436,12 @@
 
                 <div style="margin: 10px 0; color: var(--text-secondary); font-size: 14px;">------ أو ------</div>
 
-                <!-- الاتصال بصديق -->
+                <!-- الاتصال بالعبد -->
                 <div class="input-group">
-                    <label>معرف الصديق (للاتصال به)</label>
+                    <label>رابط العبد (للاتصال به)</label>
                     <div class="input-wrapper">
                         <i class="fa-solid fa-link"></i>
-                        <input type="text" id="friend-id-input" placeholder="ضع معرف الصديق هنا...">
+                        <input type="text" id="friend-id-input" placeholder="ضع رابط العبد هنا...">
                     </div>
                 </div>
 
@@ -460,19 +460,19 @@
                         <i class="fa-solid fa-user"></i>
                     </div>
                     <div class="status">
-                        <span class="status-name" id="header-name">الصديق</span>
+                        <span class="status-name" id="header-name">العبد</span>
                         <span class="status-text offline" id="connection-status">غير متصل</span>
                     </div>
                 </div>
                 <div class="chat-actions">
-                    <button onclick="location.reload()" title="قطع الاتصال وتجديد المعرف">
+                    <button onclick="location.reload()" title="قطع الاتصال وتجديد الرابط">
                         <i class="fa-solid fa-right-from-bracket"></i>
                     </button>
                 </div>
             </div>
 
             <div class="messages-area" id="messages-area">
-                <div class="system-msg">أهلاً بك في المحادثة المشفرة.</div>
+                <div class="system-msg">أهلا بك في كوكبنا</div>
                 <div class="system-msg">تذكر: يجب أن تبقى الصفحة مفتوحة لاستقبال الرسائل.</div>
             </div>
 
@@ -520,7 +520,7 @@
                 myPeerId = id;
                 myIdDisplay.textContent = myPeerId;
                 myIdDisplay.style.color = '#fff';
-                showToast("تم إنشاء المعرف الخاص بك");
+                showToast("تم إنشاء الرابط الخاص بك");
             });
 
             // عند استقبال طلب اتصال (مكالمة واردة)
@@ -532,7 +532,7 @@
             peer.on('error', (err) => {
                 console.error(err);
                 if (err.type === 'peer-unavailable') {
-                    showToast("المعرف غير موجود أو الصديق غير متصل");
+                    showToast("الرابط غير موجود أو العبد غير متصل");
                 } else {
                     showToast("حدث خطأ في الاتصال: " + err.type);
                 }
@@ -565,7 +565,7 @@
 
             conn.on('close', () => {
                 updateStatus(false);
-                showToast("انقطع الاتصال بالصديق");
+                showToast("انقطع الاتصال بالعبد");
             });
         }
 
@@ -580,7 +580,7 @@
             }
 
             if (!friendId) {
-                showToast("الرجاء إدخال معرف الصديق");
+                showToast("الرجاء إدخال رابط العبد");
                 return;
             }
 
@@ -639,7 +639,7 @@
                 appendMessage(data.content, 'received');
                 playSound('incoming');
             } else if (data.type === 'name') {
-                 // تحديث اسم الصديق إذا أرسله
+                 // تحديث اسم العبد إذا أرسله
                  headerName.textContent = data.content;
             }
         }
