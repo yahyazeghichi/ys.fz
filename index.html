@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Chat - Full History</title>
-    <!-- Gun.js Library for Decentralized Database -->
+    <title>Pixel Chat - Stable</title>
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -70,11 +69,12 @@
             font-family: 'Press Start 2P', cursive;
             font-size: 0.5rem;
             background: #000;
-            color: #00ff00; /* Always green since Gun is peer-to-peer eventually */
+            color: #ff0000;
             padding: 5px 8px;
             border: 2px solid #fff;
             text-transform: uppercase;
         }
+        .status-badge.online { color: #00ff00; }
 
         #chat-window {
             flex: 1;
@@ -192,7 +192,7 @@
             white-space: nowrap;
         }
         button:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
-        button:disabled { background-color: #555; cursor: not-allowed; }
+        button:disabled { background-color: #555; cursor: not-allowed; transform: none; }
         button.clear-btn { background-color: #ff4757; font-size: 0.6rem; padding: 8px 10px; }
 
         #login-screen {
@@ -221,15 +221,15 @@
 
     <div class="terminal-container">
         <header>
-            <h1>PIXEL DB <span style="color:var(--primary)">CHAT</span></h1>
+            <h1>PIXEL DB <span style="color:var(--primary)">V2</span></h1>
             <div style="display:flex; gap:10px; align-items:center;">
                 <button class="clear-btn" onclick="clearHistory()">CLR</button>
-                <div class="status-badge">DB ONLINE</div>
+                <div id="status" class="status-badge">OFFLINE</div>
             </div>
         </header>
 
         <main id="chat-window">
-            <div class="system-msg">Connecting to Decentralized Database...</div>
+            <div class="system-msg">Initializing Database...</div>
         </main>
 
         <!-- Reply Preview Bar -->
@@ -256,15 +256,23 @@
 
     <script>
         // --- CONFIGURATION (GUN.JS) ---
-        // Gun.js uses public relay servers to sync data. 
-        // No username/password needed. Data is public on this relay.
-        var gun = Gun({ peers: ['https://gun-manhattan.herokuapp.com/gun'] });
-        var chatDB = gun.get('pixel-chat-db-v3'); // Unique key for your chat room
+        // Using multiple relays for redundancy
+        var gun = Gun({
+            peers: [
+                'https://gun-manhattan.herokuapp.com/gun',
+                'https://gun-us.herokuapp.com/gun',
+                'https://gun-eu.herokuapp.com/gun'
+            ],
+            localStorage: true // Force local storage
+        });
+        
+        var chatDB = gun.get('pixel-chat-db-v4'); 
         
         let myName = "";
         let myId = "user-" + Math.random().toString(36).substr(2, 9);
         
         // Keep track of rendered messages to prevent duplicates
+        // Using Set of message IDs (Soul IDs) is the safest way in Gun
         let renderedMessageIds = new Set(); 
         let replyingTo = null;
 
@@ -296,26 +304,27 @@
             document.getElementById('message-input').disabled = false;
             document.getElementById('send-btn').disabled = false;
             document.getElementById('message-input').focus();
+            document.getElementById('status').innerText = "DB ONLINE";
+            document.getElementById('status').classList.add('online');
 
             // Listen to Database
             listenToChat();
             
-            // Load Local History (Backup)
-            loadLocalHistory();
-            
-            addSystemMessage("Connected to Database. History enabled.");
+            addSystemMessage("Database Connected. History loading...");
         }
 
         // --- DATABASE LISTENER ---
         function listenToChat() {
             // .map() listens to every item in the list
-            chatDB.map().on(function(data, id) {
-                if (!data) return;
-                
-                // Ensure data has text/sender (Gun syncs empty slots sometimes)
-                if (!data.text) return;
+            chatDB.map().on(function(data, key) {
+                // Gun sometimes sends null/undefined for empty slots, ignore them
+                if (!data || !data.text) return;
 
-                // Check if we already rendered this specific ID
+                // Key in Gun is the Soul ID (Unique ID)
+                const id = key;
+
+                // CRITICAL: Check if we already rendered this exact ID
+                // This solves the "Duplicate Message" issue
                 if (renderedMessageIds.has(id)) return;
                 
                 // Mark as rendered
@@ -325,9 +334,6 @@
                 const isMe = (data.senderId === myId);
 
                 renderMessage(data, isMe, id);
-                
-                // Save locally for offline backup
-                if (!isMe) saveToHistory(data, false);
             });
         }
 
@@ -335,13 +341,18 @@
         function sendMessage() {
             const input = document.getElementById('message-input');
             const text = input.value.trim();
+            const btn = document.getElementById('send-btn');
 
             if (text !== "") {
+                // UI Feedback: Disable button and show "..."
+                btn.disabled = true;
+                btn.innerText = "...";
+
                 const messageData = {
                     sender: myName,
                     senderId: myId,
                     text: text,
-                    timestamp: Date.now() // Crucial for sorting
+                    timestamp: Date.now()
                 };
 
                 // Attach Reply if exists
@@ -353,32 +364,26 @@
                 }
 
                 // Send to Gun Database
-                // .set() adds it to the list
-                chatDB.set(messageData);
-
-                // Render locally immediately
-                renderMessage(messageData, true, "local-" + Date.now());
-                saveToHistory(messageData, true);
-
-                input.value = '';
-                cancelReply();
-                input.focus();
+                // We do NOT call renderMessage here. We let map().on handle it to avoid duplicates.
+                chatDB.set(messageData, function(ack){
+                    // Callback when sent
+                    btn.disabled = false;
+                    btn.innerText = "SEND";
+                    input.value = '';
+                    input.focus();
+                    cancelReply();
+                });
             }
         }
 
-        // --- RENDERING (WITH SORTING) ---
+        // --- RENDERING ---
         function renderMessage(data, isMe, id) {
             const chatWindow = document.getElementById('chat-window');
             
-            // If this is a local message or reply, we just append it for now.
-            // But for history load from Gun, we might get jumbled order.
-            // Simple strategy: Append. If user sees messages out of order initially, it corrects quickly.
-            // For a robust app, we'd sort DOM nodes, but for this script, appending is safer to avoid flickering.
-
             const msgDiv = document.createElement('div');
             msgDiv.classList.add('message');
             msgDiv.classList.add(isMe ? 'mine' : 'other');
-            msgDiv.id = "msg-" + id; // Store ID
+            msgDiv.id = "msg-" + id; // Store ID in DOM for reference
 
             let innerHTML = '';
 
@@ -391,7 +396,6 @@
             const timeStr = new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
             // Header
-            // We serialize data to pass to function
             const dataStr = JSON.stringify(data).replace(/"/g, '&quot;');
             
             innerHTML += `<span class="meta">
@@ -403,7 +407,7 @@
             innerHTML += escapeHtml(data.text);
             
             msgDiv.innerHTML = innerHTML;
-
+            
             // Insert at end
             chatWindow.appendChild(msgDiv);
             scrollToBottom();
@@ -443,27 +447,10 @@
         }
 
         function clearHistory() {
-            if(confirm("Clear local history? (Database history remains)")) {
-                localStorage.removeItem('pixel_chat_gun_db');
+            if(confirm("Delete local history? This will clear your browser's cache of messages.")) {
+                localStorage.clear(); // Clear all Gun data
                 location.reload();
             }
-        }
-
-        // --- LOCAL STORAGE BACKUP ---
-        function saveToHistory(data, isMe) {
-            let history = JSON.parse(localStorage.getItem('pixel_chat_gun_db')) || [];
-            // Avoid duplicates in local storage
-            if(history.some(h => h.text === data.text && h.sender === data.sender)) return;
-            
-            history.push({ ...data, isMe: isMe });
-            if (history.length > 50) history = history.slice(-50);
-            localStorage.setItem('pixel_chat_gun_db', JSON.stringify(history));
-        }
-
-        function loadLocalHistory() {
-            // Note: This is just a fast render before DB loads. DB will overwrite/duplicate check.
-            // We can skip this to rely purely on DB for cleanliness, 
-            // or keep it for "instant feel". Let's skip to rely on DB for consistency.
         }
 
         function escapeHtml(text) {
