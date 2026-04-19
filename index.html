@@ -1,525 +1,747 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pixel Chat - Global Fix</title>
-    <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <title>تطبيق الدردشة المباشر | P2P Chat</title>
+    <!-- استيراد خط تجوال من جوجل -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- استيراد مكتبة PeerJS للاتصال P2P -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <!-- استيراد مكتبة أيقونات -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
         :root {
-            --bg-color: #202028;
-            --chat-bg: #000000;
-            --primary: #4cc9f0;
-            --accent: #f72585;
-            --text-color: #e0e0e0;
-            --user-bubble: #4cc9f0;
-            --other-bubble: #4895ef;
-            --border-color: #ffffff;
+            --primary-color: #008069;
+            --secondary-color: #00a884;
+            --bg-color: #0b141a;
+            --chat-bg: #0b141a;
+            --msg-out: #005c4b;
+            --msg-in: #202c33;
+            --text-primary: #e9edef;
+            --text-secondary: #8696a0;
+            --danger: #ef5350;
+            --success: #25d366;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'VT323', monospace;
+            font-family: 'Tajawal', sans-serif;
+            background-color: #111b21;
+            color: var(--text-primary);
+            height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            background-image: 
-                linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-            background-size: 20px 20px;
+            overflow: hidden;
         }
 
-        .terminal-container {
+        /* حاوية التطبيق */
+        .app-container {
             width: 100%;
-            max-width: 600px;
-            height: 90vh;
+            max-width: 1000px;
+            height: 95vh;
             background-color: var(--chat-bg);
-            border: 4px solid var(--border-color);
-            box-shadow: -4px 0 0 0 rgba(0,0,0,0.5) inset, 4px 0 0 0 rgba(255,255,255,0.2) inset, 0 0 30px rgba(0,0,0,0.8);
             display: flex;
             flex-direction: column;
             position: relative;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            border-radius: 0;
         }
 
-        header {
-            background-color: var(--accent);
-            padding: 10px 15px;
-            border-bottom: 4px solid var(--border-color);
+        @media (min-width: 768px) {
+            .app-container {
+                height: 90vh;
+                border-radius: 12px;
+                border: 1px solid #222d34;
+            }
+        }
+
+        /* الشاشات (تسجيل الدخول / الدردشة) */
+        .screen {
+            flex: 1;
+            display: none; /* مخفي افتراضياً */
+            flex-direction: column;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .screen.active {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
 
-        h1 {
-            font-family: 'Press Start 2P', cursive;
-            font-size: 0.6rem;
-            text-shadow: 2px 2px 0 #000;
-            color: #fff;
-            line-height: 1.5;
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* شاشة تسجيل الدخول / الاتصال */
+        .login-screen {
+            padding: 40px;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .logo-area {
+            margin-bottom: 30px;
+        }
+
+        .logo-area i {
+            font-size: 60px;
+            color: var(--secondary-color);
+            margin-bottom: 15px;
+        }
+
+        .logo-area h2 {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .input-group {
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 20px;
+            text-align: right;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            top: 50%;
+            right: 15px;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 45px 12px 15px;
+            background-color: #202c33;
+            border: 1px solid #222d34;
+            border-radius: 8px;
+            color: white;
+            font-family: inherit;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--secondary-color);
+        }
+
+        /* زر النسخ */
+        .copy-btn {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--secondary-color);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 5px;
+            transition: transform 0.2s;
         }
         
-        .status-badge {
-            font-family: 'Press Start 2P', cursive;
-            font-size: 0.5rem;
-            background: #000;
-            color: #ff0000;
-            padding: 5px 8px;
-            border: 2px solid #fff;
-            text-transform: uppercase;
+        .copy-btn:active {
+            transform: translateY(-50%) scale(0.9);
         }
-        .status-badge.online { color: #00ff00; }
 
-        #chat-window {
-            flex: 1;
+        .btn-primary {
+            width: 100%;
+            max-width: 400px;
+            padding: 14px;
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-color);
+        }
+
+        .btn-primary:disabled {
+            background-color: #374045;
+            cursor: not-allowed;
+            color: #8696a0;
+        }
+
+        .my-id-display {
+            background-color: #202c33;
             padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            border: 1px solid #374045;
+            position: relative;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .my-id-text {
+            font-family: monospace;
+            font-size: 18px;
+            color: var(--secondary-color);
+            letter-spacing: 1px;
+            word-break: break-all;
+        }
+
+        /* واجهة الدردشة */
+        .chat-header {
+            padding: 15px 20px;
+            background-color: #202c33;
+            border-bottom: 1px solid #222d34;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #374045;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            color: #fff;
+        }
+
+        .status {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .status-name {
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .status-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .status-text.online { color: var(--success); }
+        .status-text.offline { color: var(--text-secondary); }
+
+        .chat-actions button {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            margin-left: 15px;
+        }
+
+        .chat-actions button:hover { color: #fff; }
+
+        /* منطقة الرسائل */
+        .messages-area {
+            flex: 1;
+            padding: 20px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            font-size: 1.4rem;
+            gap: 8px;
+            background-image: linear-gradient(rgba(11, 20, 26, 0.9), rgba(11, 20, 26, 0.9)), url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+            background-size: contain;
         }
-
-        #chat-window::-webkit-scrollbar { width: 14px; }
-        #chat-window::-webkit-scrollbar-track { background: #111; }
-        #chat-window::-webkit-scrollbar-thumb { background: var(--primary); border: 2px solid #000; }
 
         .message {
-            max-width: 85%;
+            max-width: 65%;
             padding: 8px 12px;
-            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 15px;
+            line-height: 1.4;
             position: relative;
-            line-height: 1.3;
             word-wrap: break-word;
-            box-shadow: 4px 4px 0 #000;
-            animation: popIn 0.2s ease;
+            box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
         }
 
-        @keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-        .message.other { align-self: flex-start; background-color: var(--other-bubble); color: #fff; border-radius: 0 12px 12px 12px; }
-        .message.mine { align-self: flex-end; background-color: var(--user-bubble); color: #000; border-radius: 12px 0 12px 12px; box-shadow: -4px 4px 0 #000; }
-
-        .message .meta { 
-            font-family: 'Press Start 2P', cursive;
-            font-size: 0.5rem; margin-bottom: 6px; display: block; opacity: 0.9; 
-            border-bottom: 1px solid rgba(0,0,0,0.2); padding-bottom: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .message.received {
+            align-self: flex-start;
+            background-color: var(--msg-in);
+            border-top-right-radius: 0;
         }
 
-        .reply-btn {
-            cursor: pointer;
-            color: #000;
-            font-weight: bold;
-            font-size: 0.7rem;
-            margin-left: 10px;
-            user-select: none;
-            text-decoration: underline;
-        }
-        .message.other .reply-btn { color: #fff; }
-
-        .message-quote {
-            background-color: rgba(0,0,0,0.3);
-            border-right: 3px solid #fff;
-            padding: 5px;
-            margin-bottom: 8px;
-            font-size: 1rem;
-            font-style: italic;
-            color: #ccc;
+        .message.sent {
+            align-self: flex-end;
+            background-color: var(--msg-out);
+            border-top-left-radius: 0;
         }
 
-        .system-msg { text-align: center; color: #888; font-size: 1.1rem; margin: 10px 0; font-style: italic; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px; }
-
-        #reply-preview-bar {
-            display: none; 
-            background-color: #333;
-            border-bottom: 2px solid var(--accent);
-            padding: 8px 15px;
-            font-size: 1rem;
-            justify-content: space-between;
-            align-items: center;
-        }
-        #reply-preview-text { color: #fff; opacity: 0.8; }
-        #cancel-reply-btn { 
-            color: #ff4757; 
-            font-weight: bold; 
-            cursor: pointer; 
-            border: 1px solid #ff4757;
-            padding: 2px 8px;
-            font-family: 'Press Start 2P', cursive;
-            font-size: 0.6rem;
+        .msg-time {
+            font-size: 10px;
+            color: rgba(255,255,255,0.6);
+            text-align: left;
+            margin-top: 4px;
+            display: block;
         }
 
+        .system-msg {
+            align-self: center;
+            background-color: #1b262c;
+            color: var(--text-secondary);
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin: 10px 0;
+            box-shadow: none;
+        }
+
+        /* منطقة الإدخال */
         .input-area {
-            padding: 10px;
-            background-color: #2b2b36;
-            border-top: 4px solid var(--border-color);
+            padding: 10px 16px;
+            background-color: #202c33;
             display: flex;
-            gap: 10px;
             align-items: center;
+            gap: 10px;
         }
 
-        input {
-            background: #000;
-            border: 2px solid #555;
-            color: var(--primary);
-            padding: 10px;
-            font-family: 'VT323', monospace;
-            font-size: 1.4rem;
+        .input-area input {
+            flex: 1;
+            padding: 12px 15px;
+            border-radius: 8px;
+            border: none;
+            background-color: #2a3942;
+            color: white;
+            font-family: inherit;
             outline: none;
-            width: 100%;
         }
-        input:focus { border-color: var(--accent); }
 
-        button {
-            background-color: var(--accent);
-            color: #fff;
-            border: 2px solid var(--border-color);
-            padding: 10px 20px;
-            font-family: 'Press Start 2P', cursive;
-            font-size: 0.7rem;
+        .send-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background-color: var(--secondary-color);
+            border: none;
+            color: white;
             cursor: pointer;
-            box-shadow: 4px 4px 0 #000;
-            transition: transform 0.1s;
-            white-space: nowrap;
-        }
-        button:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; }
-        button:disabled { background-color: #555; cursor: not-allowed; transform: none; }
-        button.clear-btn { background-color: #ff4757; font-size: 0.6rem; padding: 8px 10px; }
-        
-        /* Factory Reset Button Style */
-        button.reset-btn {
-            background-color: #ffaa00; /* Orange */
-            margin-right: 5px;
-        }
-
-        #login-screen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 100;
-            padding: 20px;
+            font-size: 18px;
+            transition: transform 0.2s;
         }
 
-        .login-box { text-align: center; border: 4px solid var(--border-color); padding: 30px; background: #111; box-shadow: 10px 10px 0 var(--accent); width: 90%; max-width: 400px; }
-        .login-box h2 { font-family: 'Press Start 2P', cursive; color: var(--primary); margin-bottom: 20px; line-height: 1.5; font-size: 1rem; }
-        
-        .login-input { margin-bottom: 15px; text-align: left; }
-        .login-input label { font-size: 1rem; color: #ccc; display: block; margin-bottom: 5px; }
-        
-        @media (max-width: 500px) {
-            .terminal-container { height: 100vh; border: none; }
-            .message { max-width: 90%; font-size: 1.2rem; }
-            h1 { font-size: 0.6rem; }
+        .send-btn:hover {
+            transform: scale(1.05);
         }
+        
+        /* التنبيهات */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .toast.show {
+            opacity: 1;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b141a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374045;
+            border-radius: 3px;
+        }
+
     </style>
 </head>
 <body>
 
-    <div class="terminal-container">
-        <header>
-            <h1>PIXEL NET</h1>
-            <div style="display:flex; gap:5px; align-items:center;">
-                <button class="reset-btn" onclick="factoryReset()" title="Clear All Data & Restart">RST</button>
-                <button class="clear-btn" onclick="clearChat()">CLR</button>
-                <div id="status" class="status-badge">OFFLINE</div>
-            </div>
-        </header>
+    <div class="toast" id="toast"></div>
 
-        <main id="chat-window">
-            <div class="system-msg">Initializing...</div>
-        </main>
-
-        <!-- Reply Preview Bar -->
-        <div id="reply-preview-bar">
-            <div id="reply-preview-text">Replying to...</div>
-            <div id="cancel-reply-btn" onclick="cancelReply()">X</div>
-        </div>
-
-        <footer class="input-area">
-            <input type="text" id="message-input" placeholder="TYPE MESSAGE..." disabled autocomplete="off">
-            <button id="send-btn" onclick="sendMessage()" disabled>SEND</button>
-        </footer>
-
-        <!-- Login Overlay -->
-        <div id="login-screen">
-            <div class="login-box">
-                <h2>ENTER INFO</h2>
-                
-                <div class="login-input">
-                    <label>NICKNAME</label>
-                    <input type="text" id="username-input" placeholder="NICKNAME" maxlength="12">
+    <div class="app-container">
+        
+        <!-- شاشة الدخول / الاتصال -->
+        <div class="screen active" id="login-screen">
+            <div class="login-screen">
+                <div class="logo-area">
+                    <i class="fa-solid fa-comments"></i>
+                    <h2>دردشة مشفرة P2P</h2>
+                    <p style="color: var(--text-secondary); margin-top: 10px;">تواصل مباشرة بين الأجهزة</p>
                 </div>
 
-                <div class="login-input">
-                    <label style="color:var(--primary)">ROOM ID (Must be SAME as friend)</label>
-                    <input type="text" id="room-id-input" value="algeria-room-1" placeholder="ROOM ID">
+                <!-- إدخال الاسم -->
+                <div class="input-group">
+                    <label>اسمك المعروض</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-user"></i>
+                        <input type="text" id="username-input" placeholder="مثال: أحمد..." maxlength="20">
+                    </div>
                 </div>
 
-                <br>
-                <button id="connect-btn" onclick="attemptJoin()">CONNECT</button>
-                <div style="margin-top:10px; font-size:0.8rem; color:#888;">If it fails, use Mobile Data or VPN.</div>
+                <!-- عرض المعرف -->
+                <div class="input-group">
+                    <label>معرفك الشخصي (أرسله لصديقك)</label>
+                    <div class="my-id-display">
+                        <span id="my-id" style="color: #666;">جاري الإنشاء...</span>
+                        <button class="copy-btn" id="copy-btn" title="نسخ المعرف">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div style="margin: 10px 0; color: var(--text-secondary); font-size: 14px;">------ أو ------</div>
+
+                <!-- الاتصال بصديق -->
+                <div class="input-group">
+                    <label>معرف الصديق (للاتصال به)</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-link"></i>
+                        <input type="text" id="friend-id-input" placeholder="ضع معرف الصديق هنا...">
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="connect-btn">
+                    <i class="fa-solid fa-plug"></i>
+                    بدء المحادثة
+                </button>
             </div>
         </div>
+
+        <!-- شاشة الدردشة -->
+        <div class="screen" id="chat-screen">
+            <div class="chat-header">
+                <div class="chat-info">
+                    <div class="avatar" id="header-avatar">
+                        <i class="fa-solid fa-user"></i>
+                    </div>
+                    <div class="status">
+                        <span class="status-name" id="header-name">الصديق</span>
+                        <span class="status-text offline" id="connection-status">غير متصل</span>
+                    </div>
+                </div>
+                <div class="chat-actions">
+                    <button onclick="location.reload()" title="قطع الاتصال وتجديد المعرف">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="messages-area" id="messages-area">
+                <div class="system-msg">أهلاً بك في المحادثة المشفرة.</div>
+                <div class="system-msg">تذكر: يجب أن تبقى الصفحة مفتوحة لاستقبال الرسائل.</div>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="msg-input" placeholder="اكتب رسالة..." autocomplete="off">
+                <button class="send-btn" id="send-btn">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
     </div>
 
     <script>
-        // --- VERSION CONTROL ---
-        // If this number changes, the app will automatically clear local cache
-        const APP_VERSION = 5; 
-
-        // --- CONFIGURATION (GUN.JS) ---
-        // Using diverse public relays. Some might be blocked in Algeria, so we try multiple.
-        var gun = Gun({
-            peers: [
-                'https://gun-manhattan.herokuapp.com/gun',
-                'https://gun-us.herokuapp.com/gun',
-                'https://gun-docker-us.herokuapp.com/gun',
-                'https://gun.ecological.cx/gun'
-            ],
-            file: 'pixel-chat-db' // File name for IndexedDB
-        });
+        // --- المتغيرات العامة ---
+        let peer;
+        let conn;
+        let myPeerId = null;
+        let myName = "أنا";
         
-        let chatDB;
-        let myName = "";
-        let myId = "user-" + Math.random().toString(36).substr(2, 9);
-        let renderedMessageIds = new Set(); 
-        let replyingTo = null;
+        // عناصر الواجهة
+        const loginScreen = document.getElementById('login-screen');
+        const chatScreen = document.getElementById('chat-screen');
+        const myIdDisplay = document.getElementById('my-id');
+        const usernameInput = document.getElementById('username-input');
+        const friendIdInput = document.getElementById('friend-id-input');
+        const connectBtn = document.getElementById('connect-btn');
+        const copyBtn = document.getElementById('copy-btn');
+        
+        const messagesArea = document.getElementById('messages-area');
+        const msgInput = document.getElementById('msg-input');
+        const sendBtn = document.getElementById('send-btn');
+        const connectionStatus = document.getElementById('connection-status');
+        const headerName = document.getElementById('header-name');
 
-        // --- AUTO CLEANUP ON VERSION CHANGE ---
-        const storedVer = localStorage.getItem('pixel_chat_version');
-        if (storedVer != APP_VERSION) {
-            console.log("New Version detected. Cleaning cache...");
-            // Clear Gun Data
-            if (window.indexedDB) {
-                var req = indexedDB.deleteDatabase('pixel-chat-db');
-                req.onsuccess = function () {
-                    console.log("Database deleted");
-                    localStorage.setItem('pixel_chat_version', APP_VERSION);
-                    location.reload(); // Reload to start fresh
-                };
-                req.onerror = function () {
-                    // Fallback if IDB fails, just reload
-                    localStorage.setItem('pixel_chat_version', APP_VERSION);
-                    location.reload();
-                };
+        // --- تهيئة PeerJS ---
+        function initPeer() {
+            // إنشاء كائن Peer باستخدام الخادم العام المجاني
+            peer = new Peer(null, {
+                debug: 2
+            });
+
+            // عند فتح الاتصال والحصول على ID
+            peer.on('open', (id) => {
+                myPeerId = id;
+                myIdDisplay.textContent = myPeerId;
+                myIdDisplay.style.color = '#fff';
+                showToast("تم إنشاء المعرف الخاص بك");
+            });
+
+            // عند استقبال طلب اتصال (مكالمة واردة)
+            peer.on('connection', (connection) => {
+                handleConnection(connection);
+            });
+
+            // في حال حدوث خطأ
+            peer.on('error', (err) => {
+                console.error(err);
+                if (err.type === 'peer-unavailable') {
+                    showToast("المعرف غير موجود أو الصديق غير متصل");
+                } else {
+                    showToast("حدث خطأ في الاتصال: " + err.type);
+                }
+                connectBtn.disabled = false;
+                connectBtn.innerHTML = '<i class="fa-solid fa-plug"></i> محاولة مرة أخرى';
+            });
+        }
+
+        // --- التعامل مع الاتصال ---
+        function handleConnection(connection) {
+            // إغلاق أي اتصال سابق إذا وجد
+            if (conn && conn.open) {
+                conn.close();
+            }
+
+            conn = connection;
+
+            // مستمعو أحداث الاتصال
+            conn.on('open', () => {
+                console.log("Connected to: " + conn.peer);
+                switchToChat();
+                
+                // إذا كنا نحن من طلبنا الاتصال، نرسل اسمنا أولاً
+                // إذا هم من طلبوا الاتصال، سنستقبل اسمهم عبر حدث data
+            });
+
+            conn.on('data', (data) => {
+                receiveData(data);
+            });
+
+            conn.on('close', () => {
+                updateStatus(false);
+                showToast("انقطع الاتصال بالصديق");
+            });
+        }
+
+        // --- بدء الاتصال (ضغط الزر) ---
+        connectBtn.addEventListener('click', () => {
+            const friendId = friendIdInput.value.trim();
+            const username = usernameInput.value.trim();
+
+            if (!username) {
+                showToast("الرجاء كتابة اسمك أولاً");
+                return;
+            }
+
+            if (!friendId) {
+                showToast("الرجاء إدخال معرف الصديق");
+                return;
+            }
+
+            if (friendId === myPeerId) {
+                showToast("لا يمكنك الاتصال بنفسك!");
+                return;
+            }
+
+            myName = username;
+            connectBtn.disabled = true;
+            connectBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الاتصال...';
+
+            // إنشاء اتصال بالطرف الآخر
+            const connection = peer.connect(friendId, {
+                metadata: { username: myName }
+            });
+            
+            handleConnection(connection);
+        });
+
+        // --- تبديل الشاشات ---
+        function switchToChat() {
+            loginScreen.classList.remove('active');
+            chatScreen.classList.add('active');
+            updateStatus(true);
+            msgInput.focus();
+        }
+
+        // --- تحديث الحالة ---
+        function updateStatus(isOnline) {
+            if (isOnline) {
+                connectionStatus.textContent = "متصل الآن";
+                connectionStatus.classList.remove('offline');
+                connectionStatus.classList.add('online');
             } else {
-                localStorage.clear();
-                localStorage.setItem('pixel_chat_version', APP_VERSION);
-                location.reload();
+                connectionStatus.textContent = "غير متصل";
+                connectionStatus.classList.remove('online');
+                connectionStatus.classList.add('offline');
             }
         }
 
-        // --- MONITOR PEERS ---
-        setInterval(() => {
-            if(gun._.opt.peers) {
-                const count = Object.keys(gun._.opt.peers).length;
-                const el = document.getElementById('status');
-                el.innerText = count > 0 ? `ONLINE (${count})` : "OFFLINE";
-                if(count > 0) el.classList.add('online');
-                else el.classList.remove('online');
+        // --- استقبال البيانات ---
+        function receiveData(data) {
+            // إظهار الشاشة إذا كنا لا نزال في شاشة الدخول (اتصال وارد)
+            if (!chatScreen.classList.contains('active')) {
+                myName = usernameInput.value.trim() || "أنا";
+                switchToChat();
+                
+                // تعيين اسم الصديق من البيانات الواردة (metadata أو رسالة)
+                if(data.senderName) {
+                    headerName.textContent = data.senderName;
+                }
             }
-        }, 2000);
 
-        // --- EVENT LISTENERS ---
-        document.getElementById('username-input').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') attemptJoin();
-        });
-        document.getElementById('message-input').addEventListener('keypress', function (e) {
+            if (data.type === 'text') {
+                appendMessage(data.content, 'received');
+                playSound('incoming');
+            } else if (data.type === 'name') {
+                 // تحديث اسم الصديق إذا أرسله
+                 headerName.textContent = data.content;
+            }
+        }
+
+        // --- إرسال البيانات ---
+        function sendMessage() {
+            const text = msgInput.value.trim();
+            if (!text || !conn || !conn.open) return;
+
+            // إرسال الرسالة
+            conn.send({
+                type: 'text',
+                content: text,
+                senderName: myName
+            });
+
+            appendMessage(text, 'sent');
+            msgInput.value = '';
+            playSound('outgoing');
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        msgInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
 
-        // --- JOIN LOGIC ---
-        function attemptJoin() {
-            const nameInput = document.getElementById('username-input');
-            const roomInput = document.getElementById('room-id-input');
-            
-            if (!nameInput || !nameInput.value) {
-                alert("Please enter a name.");
-                return;
-            }
-            if (!roomInput || !roomInput.value) {
-                alert("Please enter a Room ID.");
-                return;
-            }
-
-            myName = nameInput.value.trim();
-            const roomId = roomInput.value.trim();
-
-            if (myName.length < 2) {
-                alert("Name too short.");
-                return;
-            }
-
-            // Initialize Chat DB
-            chatDB = gun.get(roomId);
-
-            // Hide Login
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('message-input').disabled = false;
-            document.getElementById('send-btn').disabled = false;
-            document.getElementById('message-input').focus();
-
-            // Start Listening
-            listenToChat();
-            
-            addSystemMessage(`Connected to Room: ${roomId}`);
-        }
-
-        // --- DATABASE LISTENER ---
-        function listenToChat() {
-            if(!chatDB) return;
-            
-            chatDB.map().on(function(data, key) {
-                // Ignore Gun sync data packets
-                if (!data || !data.text) return;
-
-                const id = key;
-                
-                // Duplicate check
-                if (renderedMessageIds.has(id)) return;
-                
-                renderedMessageIds.add(id);
-                
-                const isMe = (data.senderId === myId);
-                renderMessage(data, isMe, id);
-            });
-        }
-
-        // --- MESSAGING LOGIC ---
-        function sendMessage() {
-            const input = document.getElementById('message-input');
-            const text = input.value.trim();
-            const btn = document.getElementById('send-btn');
-
-            if (text !== "") {
-                btn.disabled = true;
-                btn.innerText = "...";
-
-                const messageData = {
-                    sender: myName,
-                    senderId: myId,
-                    text: text,
-                    timestamp: Date.now()
-                };
-
-                if (replyingTo) {
-                    messageData.replyTo = {
-                        sender: replyingTo.sender,
-                        text: replyingTo.text
-                    };
-                }
-
-                // Send to Gun
-                chatDB.set(messageData, function(ack){
-                    btn.disabled = false;
-                    btn.innerText = "SEND";
-                    input.value = '';
-                    input.focus();
-                    cancelReply();
-                });
-            }
-        }
-
-        // --- RENDERING ---
-        function renderMessage(data, isMe, id) {
-            const chatWindow = document.getElementById('chat-window');
-            
+        // --- عرض الرسائل في الواجهة ---
+        function appendMessage(text, type) {
             const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message');
-            msgDiv.classList.add(isMe ? 'mine' : 'other');
-            msgDiv.id = "msg-" + id;
-
-            let innerHTML = '';
-            if (data.replyTo) {
-                innerHTML += `<div class="message-quote">↩ ${escapeHtml(data.replyTo.sender)}: ${escapeHtml(data.replyTo.text)}</div>`;
-            }
-
-            const timeStr = new Date(data.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            const dataStr = JSON.stringify(data).replace(/"/g, '&quot;');
+            msgDiv.classList.add('message', type);
             
-            innerHTML += `<span class="meta">
-                            <span>${escapeHtml(data.sender)} [${timeStr}]</span>
-                            <span class="reply-btn" onclick="startReply(${dataStr})">↩ REPLY</span>
-                         </span>`;
-
-            innerHTML += escapeHtml(data.text);
+            const time = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
             
-            msgDiv.innerHTML = innerHTML;
-            chatWindow.appendChild(msgDiv);
+            msgDiv.innerHTML = `
+                ${escapeHtml(text)}
+                <span class="msg-time">${time}</span>
+            `;
+            
+            messagesArea.appendChild(msgDiv);
             scrollToBottom();
-        }
-
-        // --- REPLY FUNCTIONS ---
-        function startReply(messageObj) {
-            replyingTo = messageObj;
-            const previewBar = document.getElementById('reply-preview-bar');
-            const previewText = document.getElementById('reply-preview-text');
             
-            const shortText = messageObj.text.length > 25 ? messageObj.text.substring(0, 25) + "..." : messageObj.text;
-            
-            previewText.innerText = `Replying to ${messageObj.sender}: "${shortText}"`;
-            previewBar.style.display = 'flex';
-            document.getElementById('message-input').focus();
-        }
-
-        function cancelReply() {
-            replyingTo = null;
-            document.getElementById('reply-preview-bar').style.display = 'none';
-        }
-
-        // --- UTILS ---
-        function addSystemMessage(text) {
-            const chatWindow = document.getElementById('chat-window');
-            const div = document.createElement('div');
-            div.className = 'system-msg';
-            div.innerText = `> ${text}`;
-            chatWindow.appendChild(div);
-            scrollToBottom();
+            // حفظ في التاريخ المحلي (اختياري لرؤية المستخدم فقط)
+            saveToLocal(text, type);
         }
 
         function scrollToBottom() {
-            const chatWindow = document.getElementById('chat-window');
-            chatWindow.scrollTop = chatWindow.scrollHeight;
+            messagesArea.scrollTop = messagesArea.scrollHeight;
         }
 
-        // Factory Reset - Clears everything and reloads
-        function factoryReset() {
-            if(confirm("FACTORY RESET: This will delete all app data and reload the page. Continue?")) {
-                localStorage.clear();
-                if (window.indexedDB) {
-                    indexedDB.deleteDatabase('pixel-chat-db');
-                }
-                // Force version mismatch to trigger reload
-                localStorage.setItem('pixel_chat_version', 0);
-                location.reload();
-            }
-        }
+        // --- نسخ المعرف ---
+        copyBtn.addEventListener('click', () => {
+            if (!myPeerId) return;
+            navigator.clipboard.writeText(myPeerId).then(() => {
+                showToast("تم نسخ المعرف!");
+                const originalIcon = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalIcon;
+                }, 2000);
+            });
+        });
 
-        function clearChat() {
-            if(confirm("Clear local view (Messages will reappear from DB)?")) {
-                document.getElementById('chat-window').innerHTML = '';
-            }
+        // --- أدوات مساعدة ---
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
         }
 
         function escapeHtml(text) {
-            if(!text) return "";
-            return text.replace(/[&<>"']/g, function(m) { 
-                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[m]; 
-            });
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
         }
+
+        function playSound(type) {
+            // صوت بسيط جداً للتأكد، يمكن تعطيله
+            // هنا لن نضيف ملفات صوتية خارجية للحفاظ على الملف بسيطاً
+            // ولكن يمكن إضافة Audio Object هنا لاحقاً
+        }
+
+        function saveToLocal(text, type) {
+            // حفظ سجل بسيط في LocalStorage حتى لو أغلق الصفحة سيرى تاريخه هو فقط
+            // لا يتم مشاركته مع الصديق (لعدم وجود سيرفر)
+            // ميزة إضافية بسيطة
+            let history = JSON.parse(localStorage.getItem('chat_history') || '[]');
+            history.push({ text, type, date: new Date().toISOString() });
+            if(history.length > 50) history.shift(); // حفظ آخر 50 فقط
+            localStorage.setItem('chat_history', JSON.stringify(history));
+        }
+
+        // عند بدء التشغيل
+        initPeer();
+
     </script>
 </body>
 </html>
